@@ -2,9 +2,24 @@ package main
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 )
+
+func readMapString(file string) string {
+	f, err := os.Open(file)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	s, err := ioutil.ReadAll(f)
+	if err != nil {
+		panic(err)
+	}
+	return string(s)
+}
 
 func TestParseMap(t *testing.T) {
 	testCases := []struct {
@@ -15,16 +30,7 @@ func TestParseMap(t *testing.T) {
 	}{
 		{
 			name: "example",
-			in: `9.ox
-...........................
-....o......................
-............o..............
-...........................
-....o......................
-...............o...........
-...........................
-......o..............o.....
-..o.......o................`,
+			in:   readMapString("./testdata/example_file"),
 			expectedMap: Map{
 				X:        27,
 				Y:        9,
@@ -43,6 +49,36 @@ func TestParseMap(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "invalid header 1",
+			in:     readMapString("./testdata/invalid-header-1"),
+			errStr: "invalid header: 9.o",
+		},
+		{
+			name:   "invalid header 2",
+			in:     readMapString("./testdata/invalid-header-2"),
+			errStr: `strconv.Atoi: parsing "........................": invalid syntax`,
+		},
+		{
+			name:   "invalid line length",
+			in:     readMapString("./testdata/invalid-line-length"),
+			errStr: "line length is not 27 on line 4: .......................... ",
+		},
+		{
+			name:   "contains full character",
+			in:     readMapString("./testdata/full"),
+			errStr: "full character is not allowed as input: xx.........................",
+		},
+		{
+			name:   "invalid map character",
+			in:     readMapString("./testdata/invalid-map-char"),
+			errStr: "invalid map character a, candidates: [., o, x]",
+		},
+		{
+			name:   "lacked data",
+			in:     readMapString("./testdata/lacked-data"),
+			errStr: "no map data",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -55,7 +91,7 @@ func TestParseMap(t *testing.T) {
 				} else {
 					errStr := err.Error()
 					if errStr != tc.errStr {
-						t.Errorf("got %v, want %s", nil, tc.errStr)
+						t.Errorf("got %v, want %s", errStr, tc.errStr)
 					}
 				}
 			} else {

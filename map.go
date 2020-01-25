@@ -16,6 +16,7 @@ type Map struct {
 	Obstacle  byte
 	Full      byte
 	Obstacles []*Obstacle
+	Square    *Square
 }
 
 // Obstacle は障害物を表す構造体です。
@@ -30,24 +31,23 @@ type Coordinate struct {
 }
 
 // NewMap はMapを初期化して返します。
-func NewMap(y int, empty, obstacle, full byte) (*Map, error) {
+func NewMap(y int, empty, obstacle, full byte) *Map {
 	return &Map{
 		Y:        y,
 		Empty:    empty,
 		Obstacle: obstacle,
 		Full:     full,
-	}, nil
+	}
 }
 
 // NewObstacle はObstacleを初期化して返します。
-func NewObstacle(x, y int) (*Obstacle, error) {
-	p := &Obstacle{
+func NewObstacle(x, y int) *Obstacle {
+	return &Obstacle{
 		Coordinate: Coordinate{
 			X: x,
 			Y: y,
 		},
 	}
-	return p, nil
 }
 
 // ParseMap はReaderからMap情報を読み込んでMapを返します。
@@ -74,10 +74,7 @@ func ParseMap(r io.Reader) (*Map, error) {
 			full := bytes[l-1]
 			obstacle := bytes[l-2]
 			empty := bytes[l-3]
-			m, err = NewMap(y, empty, obstacle, full)
-			if err != nil {
-				return nil, err
-			}
+			m = NewMap(y, empty, obstacle, full)
 		} else {
 			// 2行目以降はマップ文字。
 			if m == nil {
@@ -100,13 +97,7 @@ func ParseMap(r io.Reader) (*Map, error) {
 				switch b {
 				case m.Empty:
 				case m.Obstacle:
-					x := j
-					y := i - 1
-					o, err := NewObstacle(x, y)
-					if err != nil {
-						return nil, err
-					}
-					m.Obstacles = append(m.Obstacles, o)
+					m.AddObstacle(j, i-1)
 				case m.Full:
 					return nil, fmt.Errorf("full character is not allowed as input: %s", line)
 				default:
@@ -121,4 +112,51 @@ func ParseMap(r io.Reader) (*Map, error) {
 		i++
 	}
 	return nil, errors.New("no map data")
+}
+
+// AddObstacle はマップに障害物を追加します。
+func (m *Map) AddObstacle(x, y int) {
+	o := NewObstacle(x, y)
+	m.Obstacles = append(m.Obstacles, o)
+}
+
+// ObstacleGrid はbool型のマップサイズと同じサイズの二次元スライスを返します。
+// 配列の障害物の位置はtrue, その他の位置はすべてfalseです。
+func (m *Map) ObstacleGrid() [][]bool {
+	g := make([][]bool, m.Y, m.Y)
+	for i := range g {
+		g[i] = make([]bool, m.X, m.X)
+	}
+	for _, o := range m.Obstacles {
+		g[o.Y][o.X] = true
+	}
+	return g
+}
+
+// String はマップを文字列化して返します。
+func (m *Map) String() string {
+	var s string
+	g := m.ObstacleGrid()
+	for i, row := range g {
+		for j, isObstacle := range row {
+			if isObstacle {
+				s += string(m.Obstacle)
+				continue
+			}
+
+			// 正方形が設定されている場合はfull文字を出力する
+			if m.Square != nil {
+				if i >= m.Square.Start.Y &&
+					j >= m.Square.Start.X &&
+					i < m.Square.Start.Y+m.Square.Size &&
+					j < m.Square.Start.X+m.Square.Size {
+					s += string(m.Full)
+					continue
+				}
+			}
+			s += string(m.Empty)
+		}
+		s += "\n"
+	}
+	return s
 }
